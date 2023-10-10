@@ -1,0 +1,29 @@
+# Formatters that are assigned to outputs ("handlers") below
+base:
+    format:
+        # simple: "%(asctime)s:%(event_type)%(level_text):%(message)"
+        simple: "{asctime}:{levelname}:{message}"
+        datefmt: "%Y-%m-%d %H:%M:%S"
+        # "{now:%Y-%m-%d %H:%M:%S}:{event_type}{level_text}:{message}"
+    level: 10  # DEBUG
+    # Outputs, one or more of which can be assigned to loggers
+    handler:
+        console:
+            enabled: True
+            formatter: "{now:%Y-%m-%d %H:%M:%S}:{event_type}{level_text}:{message}"
+            stream: sys.stdout
+            level: 10  # DEBUG
+        log_file:
+            enabled: True
+            formatter: "{now:%Y-%m-%d %H:%M:%S}:{event_type}{level_text}:{message}"
+            folder: logs
+            filename: logfile.log
+            maxBytes: 20485760  # 20 MB
+            level: 10  # DEBUG
+        history:
+            enabled: True
+            formatter: "{now:%Y-%m-%d %H:%M:%S}:{event_type}{level_text}:{message}"
+            folder: data
+            filename: garage_door_status_history.log
+            maxBytes: 20485760  # 20 MB
+            level: 20  # INFO
