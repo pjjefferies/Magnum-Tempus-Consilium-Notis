@@ -2,9 +2,14 @@ import base64
 from html.parser import HTMLParser
 from io import BytesIO
 import os
-from typing import Any
+from typing import Any, Optional, Protocol
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+
+
+class LoggerProto(Protocol):
+    def debug(self, msg: str) -> None:
+        ...
 
 
 class MyHTMLParser(HTMLParser):
@@ -78,7 +83,15 @@ def read_input_file(path: str):
 
 
 def save_image(image_data: dict[str, str]) -> bool:
-    image = Image.open(BytesIO(base64.b64decode(image_data["data"])))
+    try:
+        image = Image.open(BytesIO(base64.b64decode(image_data["data"])))
+    except UnidentifiedImageError:
+        print(
+            f"Could not create image with filename: {image_data['file_name']} and hash: {image_data['hash']}"
+        )
+        return False
+    if image_data["file_name"] is None:
+        print(f"{image_data=}")
     filename_base_old: str = ".".join(image_data["file_name"].split(".")[:-1])
     # print(f"{filename_base_old=}")
     filename_base_new: str = "_".join((filename_base_old, image_data["hash"]))
@@ -87,13 +100,29 @@ def save_image(image_data: dict[str, str]) -> bool:
     folder: str = "data\images"
     filepath: str = os.path.join(folder, filename)
     # print(f"{filepath=}")
-    image.save(fp=filepath)
+    try:
+        image.save(fp=filepath)
+    except OSError as e:
+        print(
+            f"Cannot save image with filename: {image_data['file_name']} and hash: {image_data['hash']} due to error: {e}"
+        )
     return True
 
 
-if __name__ == "__main__":
-    data = read_input_file("data/import_data/Evernote_Actions_2023-08-09.enex")
-    data_list: list[dict[str, Any]] = []
+def load_enex_backup(
+    filepath: str,
+    logger: LoggerProto,
+    max_notes_to_read: Optional[int] = None,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """
+    Returns two lists of dictionaries
+        - List of Notes, each as a dictionary
+        - List of Resources, mainly pictures, as dictionary with picture as base64 text
+    """
+
+    data = read_input_file(path=filepath)
+    notes: list[dict[str, Any]] = []
+    resources: list[dict[str, str]] = []
     # parser.feed('<html><head><title>Test</title></head>'
     #             '<body><h1>Parse me!</h1></body></html>')
 
@@ -101,7 +130,7 @@ if __name__ == "__main__":
         # if note_no == 0:  # Skip export note
         #     continue
         # print(f"\nNote No.: {note_no}")
-        new_note: dict[str, str | list[str]] = {}
+        this_note: dict[str, str | list[str]] = {}
 
         for field in note:
             match field.tag:
@@ -112,7 +141,7 @@ if __name__ == "__main__":
                     parser.feed(field_text_stripped)
                     temp = parser.data.strip()
                     # print(f"content:{temp=}")
-                    new_note[field.tag] = temp
+                    this_note[field.tag] = temp
                 case "resource":
                     image_data: dict[str, str] = {}
                     for sub_field in field:
@@ -134,60 +163,88 @@ if __name__ == "__main__":
                                             print(
                                                 f"Ignoring image field: {sub_sub_field.tag=}"
                                             )
+                                if image_data["file_name"] is None:
+                                    image_data["file_name"] = ".".join(
+                                        [
+                                            image_data["hash"],
+                                            image_data["mime"].split("/")[1],
+                                        ]
+                                    )
+                                    print(
+                                        f"image filename changed from None to {image_data['file_name']}"
+                                    )
                             case _:
                                 print(f"Ignoring image field: {sub_field.tag=}")
                     if len(image_data) == 6:
                         result: bool = save_image(image_data=image_data)
-                        if result:
-                            pass
-                            # print(
-                            #     f"Image data saved with data for tags: {image_data.keys()}"
-                            # )
-                        else:
-                            pass
-                            # print(
-                            #     f"Image data not saved with data for tags: {image_data.keys()}"
-                            # )
+                        resources.append(image_data)
                     else:
-                        print(f"Didn't find all image data. Have: {image_data.keys()}")
+                        print(
+                            f"Didn't find all image data. Have: {image_data.keys()}, hash: {image_data['hash']}"
+                        )
                 case "note-attributes":
                     for sub_field in field:
-                        new_note[sub_field.tag] = sub_field.text
+                        this_note[sub_field.tag] = sub_field.text
                 case _ if field.tag != "tag":
-                    new_note[field.tag] = field.text
+                    this_note[field.tag] = field.text
                 case _:  # if field.tag == "tag"
-                    if "tag" not in new_note:
-                        new_note["tags"] = [field.text]
+                    if "tag" not in this_note:
+                        this_note["tags"] = [field.text]
                     else:
-                        new_note["tags"] = new_note["tags"] + [field.text]
-        if new_note["title"] == "Untitled Note":
+                        this_note["tags"] = this_note["tags"] + [field.text]
+        if this_note["title"] == "Untitled Note":
             parser = MyHTMLParser(replace_tags_char=".")
-            parser.feed(new_note["content"])
+            parser.feed(this_note["content"])
             temp = parser.data.strip().strip(".")
             # print(f"{temp=}")
             new_title = temp.split(".")[0][
                 :50
             ]  # First sentence of max length 50 characters, not including tags
             if new_title:
-                new_note["title"] = new_title
-            elif new_note["content"][:9] == "<en-media":
-                new_note["title"] = "Saved Image"
+                this_note["title"] = new_title
+            elif this_note["content"][:9] == "<en-media":
+                this_note["title"] = "Saved Image"
 
-        if new_note["title"] not in ["Untitled Note", ""] or new_note["content"] != "":
-            data_list.append(new_note)
+        if (
+            this_note["title"] not in ["Untitled Note", ""]
+            or this_note["content"] != ""
+        ):
+            notes.append(this_note)
         else:
             print(
-                f"Skipping note {note_no} due to empty title and content. {new_note=}"
+                f"Skipping note {note_no} due to empty title and content. {this_note=}"
             )
 
-        if note_no >= 10:
+        if max_notes_to_read and (note_no >= max_notes_to_read):
             break
+
+    return notes, resources
+
+
+if __name__ == "__main__":
+    from src.config.config_logging import logger
+
+    filepath: str = "data/import_data/Evernote_Actions_2023-08-09.enex"
+    MAX_NOTES_TO_READ: int = 25
+    MAX_NOTES_TO_SHOW: int = 25
+
+    notes, resources = load_enex_backup(
+        filepath=filepath, max_notes_to_read=MAX_NOTES_TO_READ, logger=logger
+    )
 
     note_no: int
     note_dict: dict[str, Any]
 
-    for note_no, note_dict in enumerate(data_list):
-        print(f"\n{note_no}:")
+    for note_no, note_dict in enumerate(notes):
+        print(f"\nNote No.: {note_no}:")
         print(f"{note_dict}")
-        # if note_no >= 5:
-        #     break
+        if note_no >= MAX_NOTES_TO_SHOW:
+            break
+
+    for resource_no, resource_dict in enumerate(resources):
+        print(f"\Resource No.: {resource_no}:")
+        print(f"{resource_dict['hash']=}, {resource_dict['file_name']=}")
+        if resource_no >= MAX_NOTES_TO_SHOW:
+            break
+
+    print(f"{notes}")
