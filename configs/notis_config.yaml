@@ -1,0 +1,44 @@
+base:
+    DATABASE:
+        MAX_FIELD_LIMITS:
+            TITLE: 63
+            TAG_NAME: 16
+            BODY_TEXT: 4_096
+            IMAGE_FILENAME: 96
+            IMAGE_DATA: 8_388_607
+        TAGS:
+            WHEN: [
+                "1-Now",
+                "2-Next",
+                "3-Soon",
+                "4-Later",
+                "5-Someday/Maybe - To Buy",
+                "5-Someday/Maybe - To Do",
+                "5-Someday/Maybe - To Learn",
+                "5-Someday/Maybe - To Listen To",
+                "5-Someday/Maybe - To Make",
+                "5-Someday/Maybe - To Read",
+                "6-Waiting For",
+            ]
+            WHERE: [
+                "Listen To",
+                "Read/Review",
+                "@Ann Arbor",
+                "@Away From Home",
+                "@Away From Home-Activities",
+                "@Home-Computer",
+                "@Home-Follow-up",
+                "@Home-Garage",
+                "@Home-Inside",
+                "@Home-Outside",
+                "@Phone",
+            ]
+
+    APP:  # Window Start-up
+
+    LOGGING:
+        CONFIG_PATH: "configs/logging_config.yaml"
+
+
+dev:
+    BLANK: 0
