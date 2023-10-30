@@ -175,7 +175,9 @@ def load_enex_backup(
                                     )
                             case _:
                                 print(f"Ignoring image field: {sub_field.tag=}")
-                    if len(image_data) == 6:
+                    if all(
+                        item in image_data for item in ["file_name", "hash", "data"]
+                    ):
                         result: bool = save_image(image_data=image_data)
                         resources.append(image_data)
                     else:
@@ -188,7 +190,7 @@ def load_enex_backup(
                 case _ if field.tag != "tag":
                     this_note[field.tag] = field.text
                 case _:  # if field.tag == "tag"
-                    if "tag" not in this_note:
+                    if "tags" not in this_note:
                         this_note["tags"] = [field.text]
                     else:
                         this_note["tags"] = this_note["tags"] + [field.text]
@@ -224,7 +226,7 @@ def load_enex_backup(
 if __name__ == "__main__":
     from src.config.config_logging import logger
 
-    filepath: str = "data/import_data/Evernote_Actions_2023-08-09.enex"
+    filepath: str = "data/import_data/Test Export Tasks (2023-10-20).enex"
     MAX_NOTES_TO_READ: int = 25
     MAX_NOTES_TO_SHOW: int = 25
 
